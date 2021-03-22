@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 
-use crate::neighbor::{Neighbor, Unpack};
+use crate::{Neighbor, Unpack};
 
 // MNDP type values
 pub const MNDP_MAC_ADDRESS: u16 = 1;
@@ -22,18 +22,24 @@ pub const MNDP_IPV6_ADDRESS: u16 = 15;
 pub const MNDP_INTERFACE_NAME: u16 = 16;
 pub const MNDP_IPV4_ADDRESS: u16 = 17;
 
+/// Individual TLV field within an MNDP packet.
+/// The length is implicit from `TypeValue::value`.
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TypeValue {
+    /// MNDP type number.
     pub typ: u16,
+    /// Field bytes.
     pub value: Bytes
 }
 
 impl TypeValue {
+    /// Create a new TLV field with default/empty contents.
     pub fn new() -> TypeValue {
         Default::default()
     }
 }
 
+/// MNDP packet struct with conversions to/from `Neighbor` and raw bytes.
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct Packet {
     header: u16,
@@ -48,6 +54,7 @@ impl Packet {
         Default::default()
     }
 
+    /// Produce raw bytes from a `Packet` in MNDP protocol format.
     pub fn to_bytes<B: From<Bytes>>(&self) -> Result<B, ()> {
 
         // Allocate a new Bytes buffer with a reasonable capacity

@@ -1,4 +1,15 @@
-#[allow(unused_imports)]
+//! MikroTik Neighbor Discovery Protocol (MNDP) library and discovery tool.
+//!
+//!
 
-pub mod protocol;
-pub mod neighbor;
+#![warn(missing_docs)]
+
+mod neighbor;
+mod protocol;
+
+// pub extern crate bytes;
+pub extern crate macaddr;
+
+pub use crate::neighbor::{Neighbor, Builder, Unpack};
+pub use crate::protocol::{Packet, TypeValue};
+
