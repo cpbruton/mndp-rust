@@ -38,7 +38,7 @@ pub enum MndpType {
     Ipv6Address = MNDP_IPV6_ADDRESS,
     InterfaceName = MNDP_INTERFACE_NAME,
     Ipv4Address = MNDP_IPV4_ADDRESS,
-    // Important: All types must implement TryFrom<u16>, below.
+    // Important: All variants must implement TryFrom<u16> correctly, below.
 }
 
 impl TryFrom<u16> for MndpType {
@@ -88,6 +88,12 @@ pub struct Packet {
     fields: Vec<TypeValue>
 }
 
+impl From<Packet> for Bytes {
+    fn from(packet: Packet) -> Self {
+        packet.to_bytes()
+    }
+}
+
 impl Packet {
     /// Create a new `Packet` with default values (0) for header and sequence and
     /// an empty `Vec<TypeValue>` for fields to be added to.
@@ -96,7 +102,7 @@ impl Packet {
     }
 
     /// Produce raw bytes from a `Packet` in MNDP protocol format.
-    pub fn to_bytes<B: From<Bytes>>(&self) -> Result<B, ()> {
+    pub fn to_bytes<B: From<Bytes>>(&self) -> B {
 
         // Allocate a new Bytes buffer with a reasonable capacity
         // (Ethernet payload size minus IPv6 and UDP headers)
@@ -124,7 +130,7 @@ impl Packet {
         }
 
         // Convert to immutable and return
-        Ok(buf.freeze().into())
+        buf.freeze().into()
     }
     /// Create a new `Packet` instance by parsing raw bytes in MNDP format.
     /// Returns an error if input is shorter than 4 bytes.
@@ -262,7 +268,7 @@ impl Packet {
 fn test_packet_from_bytes() {
     let bytes: Bytes = hex::decode("3cc6000000010006c4ad34bf91110005000b656f622d726f75746572310007000f362e34382e312028737461626c6529000800084d696b726f54696b000a000441752e00000b0009324150372d5a564335000c00085242373630694753000e000101000f001026006c50067f7700000000000000000100100007766c616e31353700110004ac129d01").unwrap().into();
     let packet = Packet::from_bytes(bytes.clone()).unwrap();
-    let res: Bytes = packet.clone().to_bytes().unwrap();
+    let res: Bytes = packet.clone().to_bytes();
     assert_eq!(bytes, res);
 }
 
