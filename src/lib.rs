@@ -11,5 +11,5 @@ mod protocol;
 pub extern crate macaddr;
 
 pub use crate::neighbor::{Neighbor, Builder, Unpack};
-pub use crate::protocol::{Packet, TypeValue};
+pub use crate::protocol::{Packet, MndpType, TypeValue, SOLICIT};
 

@@ -9,6 +9,12 @@ use bytes::{Bytes, BytesMut, Buf, BufMut};
 
 use crate::{Neighbor, Unpack};
 
+pub const SOLICIT: Packet = Packet {
+    header: 0,
+    sequence: 0,
+    fields: Vec::new()
+};
+
 // MNDP type values
 const MNDP_MAC_ADDRESS: u16 = 1;
 const MNDP_IDENTITY: u16 = 5;
