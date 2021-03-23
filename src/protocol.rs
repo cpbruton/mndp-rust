@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 use std::mem::size_of;
 use std::time::Duration;
 
@@ -10,23 +10,64 @@ use bytes::{Bytes, BytesMut, Buf, BufMut};
 use crate::{Neighbor, Unpack};
 
 // MNDP type values
-pub const MNDP_MAC_ADDRESS: u16 = 1;
-pub const MNDP_IDENTITY: u16 = 5;
-pub const MNDP_VERSION: u16 = 7;
-pub const MNDP_PLATFORM: u16 = 8;
-pub const MNDP_UPTIME: u16 = 10;
-pub const MNDP_SOFTWARE_ID: u16 = 11;
-pub const MNDP_BOARD: u16 = 12;
-pub const MNDP_UNPACK: u16 = 14;
-pub const MNDP_IPV6_ADDRESS: u16 = 15;
-pub const MNDP_INTERFACE_NAME: u16 = 16;
-pub const MNDP_IPV4_ADDRESS: u16 = 17;
+const MNDP_MAC_ADDRESS: u16 = 1;
+const MNDP_IDENTITY: u16 = 5;
+const MNDP_VERSION: u16 = 7;
+const MNDP_PLATFORM: u16 = 8;
+const MNDP_UPTIME: u16 = 10;
+const MNDP_SOFTWARE_ID: u16 = 11;
+const MNDP_BOARD: u16 = 12;
+const MNDP_UNPACK: u16 = 14;
+const MNDP_IPV6_ADDRESS: u16 = 15;
+const MNDP_INTERFACE_NAME: u16 = 16;
+const MNDP_IPV4_ADDRESS: u16 = 17;
+
+/// MNDP field type (converts to/from `u16`)
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(test, derive(strum::EnumIter))]
+#[repr(u16)]
+pub enum MndpType {
+    MacAddress = MNDP_MAC_ADDRESS,
+    Identity = MNDP_IDENTITY,
+    Version = MNDP_VERSION,
+    Platform = MNDP_PLATFORM,
+    Uptime = MNDP_UPTIME,
+    SoftwareId = MNDP_SOFTWARE_ID,
+    Board = MNDP_BOARD,
+    Unpack = MNDP_UNPACK,
+    Ipv6Address = MNDP_IPV6_ADDRESS,
+    InterfaceName = MNDP_INTERFACE_NAME,
+    Ipv4Address = MNDP_IPV4_ADDRESS,
+    // Important: All types must implement TryFrom<u16>, below.
+}
+
+impl TryFrom<u16> for MndpType {
+    type Error = ();
+
+    fn try_from(n: u16) -> Result<Self, Self::Error> {
+        use MndpType::*;
+        match n {
+            x if x == MacAddress as u16 => Ok(MacAddress),
+            x if x == Identity as u16 => Ok(Identity),
+            x if x == Version as u16 => Ok(Version),
+            x if x == Platform as u16 => Ok(Platform),
+            x if x == Uptime as u16 => Ok(Uptime),
+            x if x == SoftwareId as u16 => Ok(SoftwareId),
+            x if x == Board as u16 => Ok(Board),
+            x if x == Unpack as u16 => Ok(Unpack),
+            x if x == Ipv6Address as u16 => Ok(Ipv6Address),
+            x if x == InterfaceName as u16 => Ok(InterfaceName),
+            x if x == Ipv4Address as u16 => Ok(Ipv4Address),
+            _ => Err(()),
+        }
+    }
+}
 
 /// Individual TLV field within an MNDP packet.
-/// The length is implicit from `TypeValue::value`.
+/// The length is implicit from the value.
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TypeValue {
-    /// MNDP type number.
+    /// MNDP type
     pub typ: u16,
     /// Field bytes.
     pub value: Bytes
@@ -129,26 +170,27 @@ impl Packet {
         let mut neighbor = Neighbor::builder();
 
         for tv in &self.fields {
-            neighbor = match tv.typ {
-                MNDP_BOARD => neighbor.board(String::from_utf8_lossy(&tv.value).to_string()),
-                MNDP_IDENTITY => neighbor.identity(String::from_utf8_lossy(&tv.value).to_string()),
-                MNDP_INTERFACE_NAME => neighbor.interface_name(String::from_utf8_lossy(&tv.value).to_string()),
-                MNDP_IPV4_ADDRESS => neighbor.ipv4_address::<[u8; 4]>(tv.value.as_ref().try_into().unwrap()),
-                MNDP_IPV6_ADDRESS => neighbor.ipv6_address::<[u8; 16]>(tv.value.as_ref().try_into().unwrap()),
-                MNDP_MAC_ADDRESS => neighbor.mac_address::<[u8; 6]>(tv.value.as_ref().try_into().unwrap()),
-                MNDP_PLATFORM => neighbor.platform(String::from_utf8_lossy(&tv.value).to_string()),
-                MNDP_SOFTWARE_ID => neighbor.software_id(String::from_utf8_lossy(&tv.value).to_string()),
-                MNDP_UNPACK => match tv.value[0] {
-                    0 => neighbor.unpack(Unpack::No),
-                    1 => neighbor.unpack(Unpack::Simple),
-                    // ?? => neighbor.unpack(Unpack::UncompressedHeaders), // todo
-                    // ?? => neighbor.unpack(Unpack::UncompressedAll), // todo
-                    _ => neighbor
-                },
-                MNDP_UPTIME => neighbor.uptime(Duration::from_secs(tv.value.as_ref().get_u32_le().into())),
-                MNDP_VERSION => neighbor.version(String::from_utf8_lossy(&tv.value).to_string()),
-                _ => neighbor
-            };
+            if let Ok(typ) = tv.typ.try_into() {
+                neighbor = match typ {
+                    MndpType::Board => neighbor.board(String::from_utf8_lossy(&tv.value).to_string()),
+                    MndpType::Identity => neighbor.identity(String::from_utf8_lossy(&tv.value).to_string()),
+                    MndpType::InterfaceName => neighbor.interface_name(String::from_utf8_lossy(&tv.value).to_string()),
+                    MndpType::Ipv4Address => neighbor.ipv4_address::<[u8; 4]>(tv.value.as_ref().try_into().unwrap()),
+                    MndpType::Ipv6Address => neighbor.ipv6_address::<[u8; 16]>(tv.value.as_ref().try_into().unwrap()),
+                    MndpType::MacAddress => neighbor.mac_address::<[u8; 6]>(tv.value.as_ref().try_into().unwrap()),
+                    MndpType::Platform => neighbor.platform(String::from_utf8_lossy(&tv.value).to_string()),
+                    MndpType::SoftwareId => neighbor.software_id(String::from_utf8_lossy(&tv.value).to_string()),
+                    MndpType::Unpack => match tv.value[0] {
+                        0 => neighbor.unpack(Unpack::No),
+                        1 => neighbor.unpack(Unpack::Simple),
+                        // ?? => neighbor.unpack(Unpack::UncompressedHeaders), // todo
+                        // ?? => neighbor.unpack(Unpack::UncompressedAll), // todo
+                        _ => neighbor
+                    },
+                    MndpType::Uptime => neighbor.uptime(Duration::from_secs(tv.value.as_ref().get_u32_le().into())),
+                    MndpType::Version => neighbor.version(String::from_utf8_lossy(&tv.value).to_string())
+                };
+            }
         }
 
         neighbor.build()
@@ -159,35 +201,35 @@ impl Packet {
         let mut packet = Packet::new();
 
         if let Some(val) = &neighbor.board {
-            packet.fields.push(TypeValue { typ: MNDP_BOARD, value: val.clone().into() });
+            packet.fields.push(TypeValue { typ: MndpType::Board as u16, value: val.clone().into() });
         }
 
         if let Some(val) = &neighbor.identity {
-            packet.fields.push(TypeValue { typ: MNDP_IDENTITY, value: val.clone().into() });
+            packet.fields.push(TypeValue { typ: MndpType::Identity as u16, value: val.clone().into() });
         }
 
         if let Some(val) = &neighbor.interface_name {
-            packet.fields.push(TypeValue { typ: MNDP_INTERFACE_NAME, value: val.clone().into() });
+            packet.fields.push(TypeValue { typ: MndpType::InterfaceName as u16, value: val.clone().into() });
         }
 
         if let Some(val) = &neighbor.ipv4_address {
-            packet.fields.push(TypeValue { typ: MNDP_IPV4_ADDRESS, value: Bytes::copy_from_slice(&val.octets()) });
+            packet.fields.push(TypeValue { typ: MndpType::Ipv4Address as u16, value: Bytes::copy_from_slice(&val.octets()) });
         }
 
         if let Some(val) = &neighbor.ipv6_address {
-            packet.fields.push(TypeValue { typ: MNDP_IPV6_ADDRESS, value: Bytes::copy_from_slice(&val.octets()) });
+            packet.fields.push(TypeValue { typ: MndpType::Ipv6Address as u16, value: Bytes::copy_from_slice(&val.octets()) });
         }
 
         if let Some(val) = &neighbor.mac_address {
-            packet.fields.push(TypeValue { typ: MNDP_MAC_ADDRESS, value: Bytes::copy_from_slice(val.as_bytes()) });
+            packet.fields.push(TypeValue { typ: MndpType::MacAddress as u16, value: Bytes::copy_from_slice(val.as_bytes()) });
         }
 
         if let Some(val) = &neighbor.platform {
-            packet.fields.push(TypeValue { typ: MNDP_PLATFORM, value: val.clone().into() });
+            packet.fields.push(TypeValue { typ: MndpType::Platform as u16, value: val.clone().into() });
         }
 
         if let Some(val) = &neighbor.software_id {
-            packet.fields.push(TypeValue { typ: MNDP_SOFTWARE_ID, value: val.clone().into() });
+            packet.fields.push(TypeValue { typ: MndpType::SoftwareId as u16, value: val.clone().into() });
         }
 
         if let Some(val) = &neighbor.unpack {
@@ -197,18 +239,18 @@ impl Packet {
                 // Unpack::UncompressedHeaders => todo!(), // Protocol research needed
                 // Unpack::UncompressedAll => todo!() // Protocol research needed
             };
-            packet.fields.push(TypeValue { typ: MNDP_UNPACK, value: Bytes::copy_from_slice(&[byte]) });
+            packet.fields.push(TypeValue { typ: MndpType::Unpack as u16, value: Bytes::copy_from_slice(&[byte]) });
         }
 
         if let Some(val) = &neighbor.uptime {
             // Silently ignore the uptime if it won't fit into a u32
             if let Ok(secs) = TryInto::<u32>::try_into(val.as_secs()) {
-                packet.fields.push(TypeValue { typ: MNDP_UPTIME, value: Bytes::copy_from_slice(&secs.to_le_bytes()) });
+                packet.fields.push(TypeValue { typ: MndpType::Uptime as u16, value: Bytes::copy_from_slice(&secs.to_le_bytes()) });
             }
         }
 
         if let Some(val) = &neighbor.version {
-            packet.fields.push(TypeValue { typ: MNDP_VERSION, value: val.clone().into() });
+            packet.fields.push(TypeValue { typ: MndpType::Version as u16, value: val.clone().into() });
         }
 
         packet
@@ -220,12 +262,19 @@ impl Packet {
 fn test_packet_from_bytes() {
     let bytes: Bytes = hex::decode("3cc6000000010006c4ad34bf91110005000b656f622d726f75746572310007000f362e34382e312028737461626c6529000800084d696b726f54696b000a000441752e00000b0009324150372d5a564335000c00085242373630694753000e000101000f001026006c50067f7700000000000000000100100007766c616e31353700110004ac129d01").unwrap().into();
     let packet = Packet::from_bytes(bytes.clone()).unwrap();
-    println!("{:?}", packet);
     let res: Bytes = packet.clone().to_bytes().unwrap();
-    println!("{:?}", res);
-    let neigh = packet.to_neighbor();
-    println!("{:?}", neigh);
-    panic!();
     assert_eq!(bytes, res);
 }
+
+#[test]
+fn test_mndp_type_try_into() {
+    use strum::IntoEnumIterator;
+    for mndp_type in MndpType::iter() {
+        let a = mndp_type as u16;
+        let b: MndpType = a.try_into().expect(format!("TryInto<u16> not implemented for {:?}", mndp_type).as_str());
+        assert_eq!(mndp_type, b);
+    }
+}
+
+
 
