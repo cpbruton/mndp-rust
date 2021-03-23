@@ -89,8 +89,15 @@ pub struct Packet {
 }
 
 impl From<Packet> for Bytes {
-    fn from(packet: Packet) -> Self {
+    fn from(packet: Packet) -> Bytes {
         packet.to_bytes()
+    }
+}
+
+impl TryFrom<Bytes> for Packet {
+    type Error = ();
+    fn try_from(b: Bytes) -> Result<Self, Self::Error> {
+        Packet::from_bytes(b)
     }
 }
 
